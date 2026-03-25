@@ -1,7 +1,8 @@
 import axios from 'axios';
 
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8080/api',
+  // Updated this line to point to your live Render backend
+  baseURL: import.meta.env.VITE_API_URL || 'https://pharmacy-backend-vn67.onrender.com',
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -34,29 +35,29 @@ export const dashboardService = {
 };
 
 export const inventoryService = {
-  getAll:        (page = 0, size = 50) => api.get(`/medicines?page=${page}&size=${size}`),
-  getById:       (id)         => api.get(`/medicines/${id}`),
-  add:           (data)       => api.post('/medicines', data),
-  update:        (id, data)   => api.put(`/medicines/${id}`, data),
-  delete:        (id)         => api.delete(`/medicines/${id}`),
-  search:        (query, page = 0, size = 50) => api.get(`/medicines/search?query=${encodeURIComponent(query)}&page=${page}&size=${size}`),
-  filter:        (type)       => api.get(`/medicines/filter?type=${encodeURIComponent(type)}`),
-  getAlternates: (id)         => api.get(`/medicines/${id}/alternates`),
+  getAll: (page = 0, size = 50) => api.get(`/medicines?page=${page}&size=${size}`),
+  getById: (id) => api.get(`/medicines/${id}`),
+  add: (data) => api.post('/medicines', data),
+  update: (id, data) => api.put(`/medicines/${id}`, data),
+  delete: (id) => api.delete(`/medicines/${id}`),
+  search: (query, page = 0, size = 50) => api.get(`/medicines/search?query=${encodeURIComponent(query)}&page=${page}&size=${size}`),
+  filter: (type) => api.get(`/medicines/filter?type=${encodeURIComponent(type)}`),
+  getAlternates: (id) => api.get(`/medicines/${id}/alternates`),
 };
 
 export const billingService = {
-  createInvoice:      (data)       => api.post('/billing/invoice', data),
-  getInvoices:        ()           => api.get('/billing/invoices'),
-  getInvoiceByNumber: (invNum)     => api.get(`/billing/invoices/${encodeURIComponent(invNum)}`),
-  getSalesSummary:    (start, end) => api.get(`/billing/sales/summary?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`),
-  returnInvoice:      (invNum)     => api.post(`/billing/invoices/${encodeURIComponent(invNum)}/return`),
-  clearSales:         ()           => api.delete('/billing/sales/clear'),
+  createInvoice: (data) => api.post('/billing/invoice', data),
+  getInvoices: () => api.get('/billing/invoices'),
+  getInvoiceByNumber: (invNum) => api.get(`/billing/invoices/${encodeURIComponent(invNum)}`),
+  getSalesSummary: (start, end) => api.get(`/billing/sales/summary?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`),
+  returnInvoice: (invNum) => api.post(`/billing/invoices/${encodeURIComponent(invNum)}/return`),
+  clearSales: () => api.delete('/billing/sales/clear'),
 };
 
 export const userService = {
-  getAll:  ()          => api.get('/users'),
-  create:  (data)      => api.post('/users', data),
-  delete:  (id)        => api.delete(`/users/${id}`),
+  getAll: () => api.get('/users'),
+  create: (data) => api.post('/users', data),
+  delete: (id) => api.delete(`/users/${id}`),
 };
 
 export default api;
