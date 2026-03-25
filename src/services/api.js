@@ -2,7 +2,7 @@ import axios from 'axios';
 
 export const api = axios.create({
   // Updated this line to point to your live Render backend
-  baseURL: import.meta.env.VITE_API_URL || 'https://pharmacy-backend-vn67.onrender.com',
+  baseURL: import.meta.env.VITE_API_URL || 'https://pharmacy-backend-vn67.onrender.com/api',
   headers: { 'Content-Type': 'application/json' },
 });
 
