@@ -51,6 +51,7 @@ export const billingService = {
   getInvoiceByNumber: (invNum) => api.get(`/billing/invoices/${encodeURIComponent(invNum)}`),
   getSalesSummary: (start, end) => api.get(`/billing/sales/summary?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`),
   returnInvoice: (invNum) => api.post(`/billing/invoices/${encodeURIComponent(invNum)}/return`),
+  partialReturn: (data) => api.post('/billing/invoices/partial-return', data),
   clearSales: () => api.delete('/billing/sales/clear'),
 };
 

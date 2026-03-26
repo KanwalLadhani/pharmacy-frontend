@@ -143,12 +143,14 @@ const Billing = () => {
     }
   };
 
+  const [returnQtys, setReturnQtys] = useState({}); // { itemId: qty }
+
   const handleReturn = async () => {
     if (!searchedInvoice) return;
     setIsSearchingInvoice(true);
     try {
       await billingService.returnInvoice(searchedInvoice.invoiceNumber);
-      alert('Return processed successfully! Inventory has been updated.');
+      alert('Full Return processed successfully!');
       setShowSearchModal(false);
       setShowReturnConfirm(false);
       setSearchedInvoice(null);
@@ -158,6 +160,47 @@ const Billing = () => {
     } finally {
       setIsSearchingInvoice(false);
     }
+  };
+
+  const handlePartialReturn = async () => {
+    if (!searchedInvoice) return;
+    const itemsToReturn = Object.entries(returnQtys)
+      .filter(([_, qty]) => qty > 0)
+      .map(([id, qty]) => ({ itemId: Number(id), returnQuantity: Number(qty) }));
+
+    if (itemsToReturn.length === 0) {
+      alert("Please specify at least one item and quantity to return.");
+      return;
+    }
+
+    setIsSearchingInvoice(true);
+    try {
+      await billingService.partialReturn({
+        invoiceNumber: searchedInvoice.invoiceNumber,
+        returnItems: itemsToReturn
+      });
+      alert('Partial return processed successfully!');
+      setShowSearchModal(false);
+      setSearchedInvoice(null);
+      setReturnQtys({});
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to process partial return.');
+    } finally {
+      setIsSearchingInvoice(false);
+    }
+  };
+
+  const calculatePartialRefund = () => {
+    if (!searchedInvoice) return 0;
+    let subtotal = 0;
+    Object.entries(returnQtys).forEach(([id, qty]) => {
+      const item = searchedInvoice.items.find(i => i.id === Number(id));
+      if (item && qty > 0) {
+        subtotal += item.price * qty;
+      }
+    });
+    // Apply the same 10% discount logic for the refund
+    return subtotal * (1 - (searchedInvoice.discountPercentage / 100));
   };
 
   return (
@@ -511,41 +554,86 @@ const Billing = () => {
                     <thead>
                       <tr style={{ borderBottom: '1px solid #cbd5e1', textAlign: 'left', color: '#64748b' }}>
                         <th style={{ paddingBottom: '6px' }}>Item</th>
-                        <th style={{ paddingBottom: '6px', textAlign: 'right' }}>Qty</th>
+                        <th style={{ paddingBottom: '6px', textAlign: 'right' }}>Sold</th>
+                        <th style={{ paddingBottom: '6px', textAlign: 'right' }}>Ret.</th>
                         <th style={{ paddingBottom: '6px', textAlign: 'right' }}>Price</th>
+                        {!searchedInvoice.returned && <th style={{ paddingBottom: '6px', textAlign: 'right', width: '100px' }}>Return Qty</th>}
                       </tr>
                     </thead>
                     <tbody>
-                      {searchedInvoice.items?.map(item => (
-                        <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                          <td style={{ padding: '8px 0', fontWeight: '500' }}>{item.medicine?.brandName || 'Unknown Item'}</td>
-                          <td style={{ padding: '8px 0', textAlign: 'right' }}>{item.quantity}</td>
-                          <td style={{ padding: '8px 0', textAlign: 'right' }}>{(item.price || 0).toFixed(2)}</td>
-                        </tr>
-                      ))}
+                      {searchedInvoice.items?.map(item => {
+                        const availableToReturn = item.quantity - (item.returnedQuantity || 0);
+                        return (
+                          <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                            <td style={{ padding: '8px 0', fontWeight: '500' }}>{item.medicine?.brandName || 'Unknown Item'}</td>
+                            <td style={{ padding: '8px 0', textAlign: 'right' }}>{item.quantity}</td>
+                            <td style={{ padding: '8px 0', textAlign: 'right', color: '#64748b' }}>{item.returnedQuantity || 0}</td>
+                            <td style={{ padding: '8px 0', textAlign: 'right' }}>{(item.price || 0).toFixed(2)}</td>
+                            {!searchedInvoice.returned && (
+                              <td style={{ padding: '8px 0', textAlign: 'right' }}>
+                                <input 
+                                  type="number" 
+                                  min="0" 
+                                  max={availableToReturn}
+                                  value={returnQtys[item.id] || 0}
+                                  onChange={(e) => {
+                                    const val = Math.min(availableToReturn, Math.max(0, parseInt(e.target.value) || 0));
+                                    setReturnQtys(prev => ({ ...prev, [item.id]: val }));
+                                  }}
+                                  className="input-field"
+                                  style={{ padding: '4px', textAlign: 'center', width: '60px', marginLeft: 'auto', fontSize: '0.8rem' }}
+                                  disabled={availableToReturn <= 0}
+                                />
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
 
-                {!searchedInvoice.returned && !showReturnConfirm && (
-                  <button 
-                    className="btn-danger" 
-                    style={{ width: '100%', justifyContent: 'center', padding: '12px', gap: '8px' }}
-                    onClick={() => setShowReturnConfirm(true)}
-                  >
-                    <Trash2 size={16} /> Process Full Return & Refund
-                  </button>
+                {!searchedInvoice.returned && (
+                  <div style={{ marginTop: '16px' }}>
+                    {calculatePartialRefund() > 0 ? (
+                      <div className="animate-fade-in" style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '10px', padding: '16px', marginBottom: '16px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontWeight: '600', color: '#166534' }}>Refund Amount:</span>
+                          <span style={{ fontSize: '1.2rem', fontWeight: '800', color: '#15803d' }}>PKR {calculatePartialRefund().toFixed(2)}</span>
+                        </div>
+                        <button 
+                          className="btn-primary" 
+                          style={{ width: '100%', marginTop: '12px', justifyContent: 'center', background: '#10b981' }}
+                          onClick={handlePartialReturn}
+                          disabled={isSearchingInvoice}
+                        >
+                          <CheckCircle size={18} /> Confirm Partial Return
+                        </button>
+                      </div>
+                    ) : (
+                      !showReturnConfirm && (
+                        <button 
+                          className="btn-danger" 
+                          style={{ width: '100%', justifyContent: 'center', padding: '12px', gap: '8px' }}
+                          onClick={() => setShowReturnConfirm(true)}
+                        >
+                          <Trash2 size={16} /> Process Full Return & Refund
+                        </button>
+                      )
+                    )}
+                  </div>
                 )}
 
                 {showReturnConfirm && (
                   <div style={{ background: '#fff1f2', padding: '16px', borderRadius: '12px', border: '1px solid #fda4af', textAlign: 'center' }}>
-                    <div style={{ color: '#be123c', fontWeight: '700', marginBottom: '12px', fontSize: '0.9rem' }}>Are you sure? This action will restock items and refund PKR {searchedInvoice.totalAmount.toFixed(2)}.</div>
+                    <div style={{ color: '#be123c', fontWeight: '700', marginBottom: '12px', fontSize: '0.9rem' }}>Are you sure? This action will restock ALL items and refund PKR {searchedInvoice.totalAmount.toFixed(2)}.</div>
                     <div style={{ display: 'flex', gap: '8px' }}>
                       <button className="btn-danger" style={{ flex: 1, padding: '10px' }} onClick={handleReturn} disabled={isSearchingInvoice}>Yes, Confirm Return</button>
                       <button className="btn-secondary" style={{ flex: 1, padding: '10px' }} onClick={() => setShowReturnConfirm(false)}>Cancel</button>
                     </div>
                   </div>
                 )}
+
               </div>
             )}
           </div>
