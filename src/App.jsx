@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -12,7 +12,12 @@ import UserManagement from './pages/UserManagement';
 import ShiftClosing from './pages/ShiftClosing';
 
 function App() {
+  useEffect(() => {
+    document.title = "Medi-Store";
+  }, []);
+
   return (
+
     <AuthProvider>
       <BrowserRouter>
         <Routes>
