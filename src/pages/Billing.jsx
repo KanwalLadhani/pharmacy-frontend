@@ -571,19 +571,22 @@ const Billing = () => {
                             <td style={{ padding: '8px 0', textAlign: 'right' }}>{(item.price || 0).toFixed(2)}</td>
                             {!searchedInvoice.returned && (
                               <td style={{ padding: '8px 0', textAlign: 'right' }}>
-                                <input 
-                                  type="number" 
-                                  min="0" 
-                                  max={availableToReturn}
-                                  value={returnQtys[item.id] || 0}
-                                  onChange={(e) => {
-                                    const val = Math.min(availableToReturn, Math.max(0, parseInt(e.target.value) || 0));
-                                    setReturnQtys(prev => ({ ...prev, [item.id]: val }));
-                                  }}
-                                  className="input-field"
-                                  style={{ padding: '4px', textAlign: 'center', width: '60px', marginLeft: 'auto', fontSize: '0.8rem' }}
-                                  disabled={availableToReturn <= 0}
-                                />
+                                {availableToReturn > 0 ? (
+                                  <input 
+                                    type="number" 
+                                    min="0" 
+                                    max={availableToReturn}
+                                    value={returnQtys[item.id] || 0}
+                                    onChange={(e) => {
+                                      const val = Math.min(availableToReturn, Math.max(0, parseInt(e.target.value) || 0));
+                                      setReturnQtys(prev => ({ ...prev, [item.id]: val }));
+                                    }}
+                                    className="input-field"
+                                    style={{ padding: '4px', textAlign: 'center', width: '60px', marginLeft: 'auto', fontSize: '0.8rem' }}
+                                  />
+                                ) : (
+                                  <span style={{ fontSize: '0.7rem', color: '#ef4444', fontWeight: '700' }}>FULLY RETURNED</span>
+                                )}
                               </td>
                             )}
                           </tr>

@@ -68,8 +68,26 @@ const SalesHistory = () => {
                   </td>
                   <td>
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      <span className="badge badge-success">{inv.items?.length || 0} items</span>
-                      {inv.returned && <span className="badge badge-danger">RETURNED</span>}
+                      {(() => {
+                        const effectiveItems = inv.items?.filter(item => 
+                          (item.quantity - (item.returnedQuantity || 0)) > 0
+                        ).length || 0;
+                        const hasReturns = inv.items?.some(item => (item.returnedQuantity || 0) > 0);
+                        const isFullyReturned = inv.returned || (inv.items?.length > 0 && effectiveItems === 0);
+
+                        return (
+                          <>
+                            <span className={`badge ${effectiveItems > 0 ? 'badge-success' : 'badge-secondary'}`}>
+                              {effectiveItems} items
+                            </span>
+                            {isFullyReturned ? (
+                              <span className="badge badge-danger">RETURNED</span>
+                            ) : hasReturns ? (
+                              <span className="badge" style={{ backgroundColor: '#fef3c7', color: '#92400e' }}>PARTIAL RETURN</span>
+                            ) : null}
+                          </>
+                        );
+                      })()}
                     </div>
                   </td>
                   <td style={{ textAlign: 'right', fontWeight: '700' }}>{fmt(inv.totalAmount)}</td>
