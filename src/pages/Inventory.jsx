@@ -3,7 +3,7 @@ import { inventoryService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Plus, Search, Edit2, Trash2, X, TrendingUp, ChevronLeft, ChevronRight } from 'lucide-react';
 
-const emptyForm = { brandName: '', manufacturer: '', generic: '', dosageForm: '', price: '', quantity: '' };
+const emptyForm = { brandName: '', manufacturer: '', generic: '', dosageForm: '', price: '', purchasePrice: '', quantity: '' };
 
 const Inventory = () => {
   const [medicines, setMedicines] = useState([]);
@@ -18,10 +18,32 @@ const Inventory = () => {
   const [currentPage, setCurrentPage]     = useState(0);
   const [totalPages, setTotalPages]       = useState(1);
   const [totalElements, setTotalElements] = useState(0);
+  const [notification, setNotification]   = useState(null); // { type: 'success'|'error', text: '' }
 
   const { user } = useAuth();
 
-  useEffect(() => { fetchMedicines(0); }, []);
+  // Debounced search logic
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (search !== '') {
+        fetchMedicines(0, search);
+      }
+    }, 400); // 400ms delay
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Initial load only if not search
+  useEffect(() => {
+    if (search === '') fetchMedicines(0);
+  }, []);
+
+  // Auto-hide notifications
+  useEffect(() => {
+    if (notification) {
+      const timer = setTimeout(() => setNotification(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [notification]);
 
   const fetchMedicines = async (page = 0, customQuery = null) => {
     setLoading(true); setError(null);
@@ -41,9 +63,8 @@ const Inventory = () => {
   };
 
   const handleSearch = (e) => {
-    const val = e.target.value;
-    setSearch(val);
-    fetchMedicines(0, val);
+    setSearch(e.target.value);
+    // Removed direct fetchMedicines(0, val) to use debounced useEffect
   };
 
   const openAdd  = () => { setFormData(emptyForm); setEditingId(null); setModal(true); };
@@ -54,6 +75,7 @@ const Inventory = () => {
       generic:      med.generic      || '',
       dosageForm:   med.dosageForm   || '',
       price:        med.price        !== null ? med.price : '',
+      purchasePrice: med.purchasePrice !== null ? med.purchasePrice : '',
       quantity:     med.quantity     !== null ? med.quantity : '',
     });
     setEditingId(med.brandId);
@@ -66,6 +88,7 @@ const Inventory = () => {
       ...formData,
       brandId: editingId,
       price: formData.price === '' ? 0 : Number(formData.price),
+      purchasePrice: formData.purchasePrice === '' ? 0 : Number(formData.purchasePrice),
       quantity: formData.quantity === '' ? 0 : Number(formData.quantity)
     };
     try {
@@ -73,21 +96,27 @@ const Inventory = () => {
                             : await inventoryService.add(submissionData);
       setModal(false);
       fetchMedicines(currentPage);
-      alert(`Success! Updated ${res.data.brandName}. New Quantity: ${res.data.quantity}`);
+      setNotification({ type: 'success', text: `Success! Updated ${res.data.brandName}. New Quantity: ${res.data.quantity}` });
     } catch (err) {
       console.error("Save error:", err);
       const msg = err.response?.data?.message || 'Save failed. Make sure the system is running and the data is correct.';
-      alert(msg);
+      setNotification({ type: 'error', text: msg });
     }
   };
 
   const handleDelete = async (id) => {
     if (!window.confirm('Delete this medicine?')) return;
-    try { await inventoryService.delete(id); fetchMedicines(currentPage); }
-    catch (err) { alert(err.response?.data?.message || 'Delete failed.'); }
+    try { 
+      await inventoryService.delete(id); 
+      fetchMedicines(currentPage); 
+      setNotification({ type: 'success', text: 'Item deleted successfully.' });
+    }
+    catch (err) { setNotification({ type: 'error', text: err.response?.data?.message || 'Delete failed.' }); }
   };
 
-  const displayedValue = medicines.reduce((sum, m) => sum + (Number(m.price || 0) * (m.quantity || 0)), 0);
+  const displayedValue = React.useMemo(() => {
+    return medicines.reduce((sum, m) => sum + (Number(m.price || 0) * (m.quantity || 0)), 0);
+  }, [medicines]);
 
   const field = (key, label, type = 'text', opts = {}) => {
     const val = formData && formData[key] !== undefined && formData[key] !== null ? formData[key] : '';
@@ -108,6 +137,17 @@ const Inventory = () => {
 
   return (
     <div>
+      {notification && (
+        <div style={{ 
+          position: 'fixed', top: '24px', left: '50%', transform: 'translateX(-50%)', 
+          zIndex: 10000, padding: '12px 24px', borderRadius: '12px', 
+          backgroundColor: notification.type === 'success' ? '#10b981' : '#ef4444', 
+          color: 'white', fontWeight: '600', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+          animation: 'fade-in 0.3s ease-out'
+        }}>
+          {notification.text}
+        </div>
+      )}
       <div className="page-header">
         <h1 className="page-title">Inventory</h1>
         {user?.role === 'ROLE_ADMIN' && (
@@ -121,7 +161,7 @@ const Inventory = () => {
           Total Database Items: <strong style={{ color: 'var(--text-main)' }}>{totalElements.toLocaleString()}</strong> medicines
           &nbsp;·&nbsp; Total Value (This Page):&nbsp;
           <strong style={{ color: '#10b981', fontSize: '1.05rem' }}>
-            PKR {displayedValue.toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            PKR {displayedValue.toLocaleString('en-PK', { minimumFractionDigits: 3, maximumFractionDigits: 3 })}
           </strong>
         </span>
       </div>
@@ -145,7 +185,8 @@ const Inventory = () => {
                   <th style={{ textAlign: 'left' }}>Manufacturer</th>
                   <th style={{ textAlign: 'left' }}>Salt Formula</th>
                   <th style={{ textAlign: 'left' }}>Dosage Form</th>
-                  <th style={{ textAlign: 'right' }}>Price (PKR)</th>
+                  <th style={{ textAlign: 'right' }}>Purchase (PKR)</th>
+                  <th style={{ textAlign: 'right' }}>Retail (PKR)</th>
                   <th style={{ textAlign: 'center' }}>Stock</th>
                   <th style={{ textAlign: 'right' }}>Stock Value</th>
                   {user?.role === 'ROLE_ADMIN' && <th>Actions</th>}
@@ -153,20 +194,32 @@ const Inventory = () => {
               </thead>
               <tbody>
                 {medicines.length === 0 ? (
-                  <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '32px' }}>No medicines found.</td></tr>
+                  <tr><td colSpan={9} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '32px' }}>No medicines found.</td></tr>
                 ) : medicines.map(med => {
                   const unitPrice  = Number(med.price || 0);
+                  const costPrice  = Number(med.purchasePrice || 0);
                   const qty        = med.quantity || 0;
                   const stockValue = unitPrice * qty;
                   return (
-                    <tr key={med.brandId}>
+                    <tr key={med.brandId} style={{ 
+                      backgroundColor: qty <= 20 ? 'rgba(239, 68, 68, 0.05)' : 'inherit',
+                      borderLeft: qty <= 20 ? '4px solid #ef4444' : 'none'
+                    }}>
                       <td style={{ fontWeight: '600', color: 'var(--primary)' }}>{med.brandName}</td>
                       <td>{med.manufacturer || '—'}</td>
                       <td>{med.generic || '—'}</td>
                       <td>{med.dosageForm || '—'}</td>
-                      <td style={{ textAlign: 'right' }}><strong>{unitPrice.toFixed(2)}</strong></td>
-                      <td style={{ textAlign: 'center' }}><span className={`badge ${qty < 10 ? 'badge-danger' : 'badge-success'}`}>{qty}</span></td>
-                      <td style={{ textAlign: 'right', color: 'var(--text-muted)' }}>{stockValue.toLocaleString('en-PK', { minimumFractionDigits: 2 })}</td>
+                      <td style={{ textAlign: 'right', color: '#64748b' }}>{costPrice.toFixed(3)}</td>
+                      <td style={{ textAlign: 'right' }}><strong>{unitPrice.toFixed(3)}</strong></td>
+                      <td style={{ textAlign: 'center' }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                          <span className={`badge ${qty <= 20 ? 'badge-danger' : 'badge-success'}`} style={{ fontWeight: qty <= 20 ? '800' : '500' }}>
+                           {qty}
+                          </span>
+                          {qty <= 20 && <span title="Low stock warning (Threshold: 20)" style={{ color: '#ef4444' }}>⚠️</span>}
+                        </div>
+                      </td>
+                      <td style={{ textAlign: 'right', color: 'var(--text-muted)' }}>{stockValue.toLocaleString('en-PK', { minimumFractionDigits: 3 })}</td>
                       {user?.role === 'ROLE_ADMIN' && (
                         <td>
                           <div style={{ display: 'flex', gap: '8px' }}>
@@ -214,8 +267,9 @@ const Inventory = () => {
                 {field('generic', 'Salt Formula')}
               </div>
               {field('dosageForm', 'Dosage Form (e.g. Sachet, Tablet)')}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                {field('price', 'Retail Price (PKR)', 'number', { required: true, step: '0.01', min: '0' })}
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)', gap: '12px' }}>
+                {field('purchasePrice', 'Cost Price (PKR)', 'number', { required: true, step: '0.001', min: '0' })}
+                {field('price', 'Retail Price (PKR)', 'number', { required: true, step: '0.001', min: '0' })}
                 {field('quantity', 'Available Stock', 'number', { required: true, min: '0' })}
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>

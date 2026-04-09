@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { inventoryService, billingService } from '../services/api';
 import { Plus, Trash2, ShoppingCart, Search, Printer, CheckCircle, Info, AlertTriangle, X, FileSearch } from 'lucide-react';
 
@@ -23,11 +23,27 @@ const Billing = () => {
   const [recentInvoices, setRecentInvoices] = useState([]);
   const [showReturnConfirm, setShowReturnConfirm] = useState(false);
 
+  // Notification toast state
+  const [notification, setNotification] = useState(null);
+
+  // Keyboard navigation
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const searchInputRef = useRef(null);
+
+  // Auto-hide notifications
+  useEffect(() => {
+    if (notification) {
+      const timer = setTimeout(() => setNotification(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [notification]);
+
   // Debounced search for medicines
   useEffect(() => {
     const timer = setTimeout(() => {
       if (searchQuery.trim().length > 1 && (!selectedMed || selectedMed.brandName !== searchQuery)) {
         setLoadingSearch(true);
+        setHighlightedIndex(-1);
         inventoryService.search(searchQuery)
           .then(res => {
               const list = Array.isArray(res.data) ? res.data : (res.data.content || []);
@@ -41,11 +57,40 @@ const Billing = () => {
     return () => clearTimeout(timer);
   }, [searchQuery, selectedMed]);
 
+  // Keyboard shortcuts
+  const handleSearchKeyDown = useCallback((e) => {
+    if (medicines.length === 0 || selectedMed) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightedIndex(prev => Math.min(prev + 1, medicines.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightedIndex(prev => Math.max(prev - 1, 0));
+    } else if (e.key === 'Enter' && highlightedIndex >= 0) {
+      e.preventDefault();
+      selectMedicine(medicines[highlightedIndex]);
+    }
+  }, [medicines, highlightedIndex, selectedMed]);
+
+  // Ctrl+Enter global shortcut for checkout
+  useEffect(() => {
+    const handleGlobalKeyDown = (e) => {
+      if (e.ctrlKey && e.key === 'Enter' && cart.length > 0 && !checkoutSuccess) {
+        e.preventDefault();
+        checkout();
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [cart, checkoutSuccess]);
+
   const selectMedicine = async (med) => {
     setSelectedMed(med);
     setSearchQuery(med.brandName);
     setMedicines([]);
     setQuantity(1);
+    setHighlightedIndex(-1);
     
     // Fetch alternates based on salt formula
     setLoadingAlternates(true);
@@ -65,7 +110,7 @@ const Billing = () => {
     const q = parseInt(qty);
 
     if (q > (med.quantity ?? 0)) {
-      alert(`Only ${med.quantity ?? 0} units available for "${med.brandName}"`);
+      setNotification({ type: 'error', text: `Only ${med.quantity ?? 0} units available for "${med.brandName}"` });
       return;
     }
 
@@ -84,6 +129,7 @@ const Billing = () => {
             manufacturer: med.manufacturer  || '',
             unitPrice,
             quantity:     q,
+            discount:     0,   // Per-item discount in PKR
           }];
     });
 
@@ -94,17 +140,31 @@ const Billing = () => {
       setAlternates([]);
     }
     setCheckoutSuccess(false);
+    setNotification({ type: 'success', text: `Added ${q}× ${med.brandName}` });
   };
 
   const removeFromCart = (id) => setCart(p => p.filter(i => i.medicineId !== id));
 
-  const totalAmount = cart.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
+  const updateItemDiscount = (medicineId, discountVal) => {
+    setCart(prev => prev.map(i => 
+      i.medicineId === medicineId ? { ...i, discount: Math.max(0, parseFloat(discountVal) || 0) } : i
+    ));
+  };
+
+  const subtotal = cart.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
+  const totalItemDiscounts = cart.reduce((s, i) => s + (i.discount || 0), 0);
+  const grandTotal = subtotal - totalItemDiscounts;
 
   const checkout = async () => {
     if (!cart.length) return;
     try {
       const res = await billingService.createInvoice({
-        items: cart.map(i => ({ medicineId: i.medicineId, quantity: i.quantity })),
+        items: cart.map(i => ({ 
+          medicineId: i.medicineId, 
+          quantity: i.quantity,
+          discount: i.discount || 0
+        })),
+        discountPercentage: 0
       });
       setCheckoutSuccess(true);
       setGeneratedInvoice(res.data);
@@ -114,8 +174,9 @@ const Billing = () => {
         const updated = [newInvoice, ...prev.filter(inv => inv.invoiceNumber !== newInvoice.invoiceNumber)];
         return updated.slice(0, 5); // Keep only the 5 most recent
       });
+      setNotification({ type: 'success', text: `Invoice ${res.data.invoiceNumber} created!` });
     } catch (err) {
-      alert(err.response?.data?.message || 'Checkout failed. Try again.');
+      setNotification({ type: 'error', text: err.response?.data?.message || 'Checkout failed. Try again.' });
     }
   };
 
@@ -150,13 +211,13 @@ const Billing = () => {
     setIsSearchingInvoice(true);
     try {
       await billingService.returnInvoice(searchedInvoice.invoiceNumber);
-      alert('Full Return processed successfully!');
+      setNotification({ type: 'success', text: 'Full Return processed successfully!' });
       setShowSearchModal(false);
       setShowReturnConfirm(false);
       setSearchedInvoice(null);
       setInvoiceSearchQuery('');
     } catch (err) {
-      alert(err.response?.data?.message || 'Failed to process return.');
+      setNotification({ type: 'error', text: err.response?.data?.message || 'Failed to process return.' });
     } finally {
       setIsSearchingInvoice(false);
     }
@@ -169,7 +230,7 @@ const Billing = () => {
       .map(([id, qty]) => ({ itemId: Number(id), returnQuantity: Number(qty) }));
 
     if (itemsToReturn.length === 0) {
-      alert("Please specify at least one item and quantity to return.");
+      setNotification({ type: 'error', text: "Please specify at least one item and quantity to return." });
       return;
     }
 
@@ -179,12 +240,12 @@ const Billing = () => {
         invoiceNumber: searchedInvoice.invoiceNumber,
         returnItems: itemsToReturn
       });
-      alert('Partial return processed successfully!');
+      setNotification({ type: 'success', text: 'Partial return processed successfully!' });
       setShowSearchModal(false);
       setSearchedInvoice(null);
       setReturnQtys({});
     } catch (err) {
-      alert(err.response?.data?.message || 'Failed to process partial return.');
+      setNotification({ type: 'error', text: err.response?.data?.message || 'Failed to process partial return.' });
     } finally {
       setIsSearchingInvoice(false);
     }
@@ -192,16 +253,20 @@ const Billing = () => {
 
   const calculatePartialRefund = () => {
     if (!searchedInvoice) return 0;
-    let subtotal = 0;
+    let refund = 0;
     Object.entries(returnQtys).forEach(([id, qty]) => {
       const item = searchedInvoice.items.find(i => i.id === Number(id));
       if (item && qty > 0) {
-        subtotal += item.price * qty;
+        const itemGross = item.price * qty;
+        // Proportional discount: (itemDiscount * returnQty) / originalQty
+        const propDiscount = ((item.itemDiscount || 0) * qty) / (item.quantity || 1);
+        refund += itemGross - propDiscount;
       }
     });
-    // Apply the same 10% discount logic for the refund
-    return subtotal * (1 - (searchedInvoice.discountPercentage / 100));
+    return refund;
   };
+
+  const fmt = (n) => `PKR ${Number(n || 0).toLocaleString('en-PK', { minimumFractionDigits: 3, maximumFractionDigits: 3 })}`;
 
   return (
     <div>
@@ -230,6 +295,19 @@ const Billing = () => {
         `}
       </style>
 
+      {/* Notification Toast */}
+      {notification && (
+        <div style={{ 
+          position: 'fixed', top: '24px', left: '50%', transform: 'translateX(-50%)', 
+          zIndex: 10000, padding: '12px 24px', borderRadius: '12px', 
+          backgroundColor: notification.type === 'success' ? '#10b981' : '#ef4444', 
+          color: 'white', fontWeight: '600', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+          animation: 'fade-in 0.3s ease-out'
+        }}>
+          {notification.text}
+        </div>
+      )}
+
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h1 className="page-title">Billing & Checkout</h1>
         <button className="btn-secondary" onClick={() => setShowSearchModal(true)}>
@@ -248,6 +326,7 @@ const Billing = () => {
               <div style={{ position: 'relative' }}>
                 <Search size={16} color="var(--text-muted)" style={{ position: 'absolute', left: '12px', top: '14px' }} />
                 <input 
+                  ref={searchInputRef}
                   type="text" 
                   className="input-field" 
                   placeholder="Type medicine name..." 
@@ -259,6 +338,7 @@ const Billing = () => {
                       setAlternates([]);
                     }
                   }}
+                  onKeyDown={handleSearchKeyDown}
                   style={{ paddingLeft: '38px' }}
                 />
               </div>
@@ -269,14 +349,15 @@ const Billing = () => {
                     <div style={{ padding: '12px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>Searching...</div>
                   ) : medicines.length > 0 ? (
                     <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-                      {medicines.map(med => (
+                      {medicines.map((med, idx) => (
                         <li 
                           key={med.brandId} 
                           style={{ 
                             padding: '10px 14px', borderBottom: '1px solid var(--border-color)', 
-                            cursor: 'pointer', transition: 'background 0.2s'
+                            cursor: 'pointer', transition: 'background 0.2s',
+                            background: idx === highlightedIndex ? '#e0f2fe' : 'transparent'
                           }}
-                          onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'}
+                          onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; setHighlightedIndex(idx); }}
                           onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                           onClick={() => selectMedicine(med)}
                         >
@@ -287,7 +368,7 @@ const Billing = () => {
                             </span>
                           </div>
                           <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '2px', display: 'flex', gap: '12px' }}>
-                            <span>PKR {Number(med.price || 0).toFixed(2)}</span>
+                            <span>{fmt(med.price)}</span>
                             <span>Salt: {med.generic || 'N/A'}</span>
                           </div>
                         </li>
@@ -321,7 +402,7 @@ const Billing = () => {
                     <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '4px' }}>Generic: <strong>{selectedMed.generic || 'N/A'}</strong></div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontWeight: '700', fontSize: '1.1rem', color: 'var(--success)' }}>PKR {Number(selectedMed.price || 0).toFixed(2)}</div>
+                    <div style={{ fontWeight: '700', fontSize: '1.1rem', color: 'var(--success)' }}>{fmt(selectedMed.price)}</div>
                     <div style={{ fontSize: '0.8rem', color: selectedMed.quantity <= 0 ? '#ef4444' : 'var(--text-muted)' }}>
                       Available: <strong>{selectedMed.quantity} units</strong>
                     </div>
@@ -352,7 +433,7 @@ const Billing = () => {
                           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>By {alt.manufacturer || 'Unknown'} · {alt.quantity} in stock</div>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                          <span style={{ fontWeight: '700', fontSize: '0.9rem', color: 'var(--success)' }}>PKR {Number(alt.price || 0).toFixed(2)}</span>
+                          <span style={{ fontWeight: '700', fontSize: '0.9rem', color: 'var(--success)' }}>{fmt(alt.price)}</span>
                           <button className="btn-secondary" style={{ padding: '6px 10px', fontSize: '0.75rem' }} onClick={() => addToCart(alt, quantity)}>
                             <Plus size={14} /> Add {quantity > 1 ? `(${quantity})` : ''}
                           </button>
@@ -388,44 +469,59 @@ const Billing = () => {
             {checkoutSuccess && <span className="badge badge-success no-print"><CheckCircle size={14} style={{ marginRight: '4px' }} /> Paid</span>}
           </div>
 
-          <div style={{ flex: 1, minHeight: '200px' }}>
+          <div style={{ flex: 1, minHeight: '200px', maxHeight: '55vh', overflowY: 'auto' }}>
             {cart.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)' }} className="no-print">
                 <ShoppingCart size={48} style={{ opacity: 0.1, marginBottom: '12px' }} />
                 <p>Invoice is empty</p>
               </div>
             ) : (
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+              <table className="compact-table" style={{ width: '100%', fontSize: '0.9rem' }}>
                  <thead>
-                    <tr style={{ borderBottom: '1px solid var(--border-color)', textAlign: 'left', color: 'var(--text-muted)' }} className="print-border">
+                    <tr style={{ borderBottom: '2px solid var(--border-color)', textAlign: 'left', color: 'var(--text-muted)' }} className="print-border">
                        <th style={{ paddingBottom: '8px', fontWeight: '500' }}>Item</th>
                        <th style={{ paddingBottom: '8px', fontWeight: '500', textAlign: 'right' }}>Qty</th>
                        <th style={{ paddingBottom: '8px', fontWeight: '500', textAlign: 'right' }}>Price</th>
+                       {!checkoutSuccess && <th style={{ paddingBottom: '8px', fontWeight: '500', textAlign: 'right', width: '80px' }} className="no-print">Disc (PKR)</th>}
                        <th style={{ paddingBottom: '8px', fontWeight: '500', textAlign: 'right' }}>Total</th>
                        {!checkoutSuccess && <th className="no-print"></th>}
                     </tr>
                  </thead>
                  <tbody>
-                    {cart.map(item => (
-                       <tr key={item.medicineId} style={{ borderBottom: '1px dashed var(--border-color)' }} className="print-border">
-                          <td style={{ padding: '12px 0' }}>
-                             <div style={{ fontWeight: '600' }}>{item.brandName}</div>
-                             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{item.generic}</div>
-                          </td>
-                          <td style={{ padding: '12px 0', textAlign: 'right' }}>{item.quantity}</td>
-                          <td style={{ padding: '12px 0', textAlign: 'right' }}>{item.unitPrice.toFixed(2)}</td>
-                          <td style={{ padding: '12px 0', textAlign: 'right', fontWeight: '700' }}>
-                             {(item.unitPrice * item.quantity).toFixed(2)}
-                          </td>
-                          {!checkoutSuccess && (
-                             <td style={{ padding: '12px 0', textAlign: 'right' }} className="no-print">
-                                <button className="btn-danger" style={{ padding: '4px', borderRadius: '4px' }} onClick={() => removeFromCart(item.medicineId)}>
-                                  <Trash2 size={14} />
-                                </button>
+                    {cart.map(item => {
+                      const rowTotal = (item.unitPrice * item.quantity) - (item.discount || 0);
+                      return (
+                        <tr key={item.medicineId} style={{ borderBottom: '1px dashed var(--border-color)' }} className="print-border">
+                           <td style={{ padding: '10px 0' }}>
+                              <div className="text-ellipsis" style={{ fontWeight: '600', maxWidth: '160px' }}>{item.brandName}</div>
+                              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{item.generic}</div>
+                           </td>
+                           <td style={{ padding: '10px 0', textAlign: 'right' }}>{item.quantity}</td>
+                           <td style={{ padding: '10px 0', textAlign: 'right' }}>{item.unitPrice.toFixed(3)}</td>
+                           {!checkoutSuccess && (
+                             <td style={{ padding: '10px 0', textAlign: 'right' }} className="no-print">
+                               <input 
+                                 type="number" min="0"
+                                 className="low-profile-input"
+                                 value={item.discount || 0}
+                                 onChange={e => updateItemDiscount(item.medicineId, e.target.value)}
+                                 style={{ width: '65px', textAlign: 'center' }}
+                               />
                              </td>
-                          )}
-                       </tr>
-                    ))}
+                           )}
+                           <td style={{ padding: '10px 0', textAlign: 'right', fontWeight: '700' }}>
+                              {rowTotal.toFixed(3)}
+                           </td>
+                           {!checkoutSuccess && (
+                              <td style={{ padding: '10px 0', textAlign: 'right' }} className="no-print">
+                                 <button className="btn-danger" style={{ padding: '4px', borderRadius: '4px' }} onClick={() => removeFromCart(item.medicineId)}>
+                                   <Trash2 size={14} />
+                                 </button>
+                              </td>
+                           )}
+                        </tr>
+                      );
+                    })}
                  </tbody>
               </table>
             )}
@@ -435,19 +531,21 @@ const Billing = () => {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '20px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
                 <span>Subtotal</span>
-                <span>PKR {totalAmount.toFixed(2)}</span>
+                <span>{fmt(subtotal)}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#10b981', fontWeight: '600' }}>
-                <span>Default Discount (10%)</span>
-                <span>- PKR {(totalAmount * 0.1).toFixed(2)}</span>
-              </div>
+              {totalItemDiscounts > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#10b981', fontWeight: '600' }}>
+                  <span>Total Item Discounts</span>
+                  <span>- {fmt(totalItemDiscounts)}</span>
+                </div>
+              )}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '8px' }}>
                 <span style={{ fontWeight: '700' }}>Grand Total</span>
                 <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--primary)', lineHeight: '1' }}>
-                  PKR {(totalAmount * 0.9).toFixed(2)}
+                  {fmt(grandTotal)}
                 </div>
               </div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'right' }}>Items count: {cart.length}</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'right' }}>Items count: {cart.length} · <span style={{ opacity: 0.5 }}>Ctrl+Enter: Quick Checkout</span></div>
             </div>
             
             {!checkoutSuccess ? (
@@ -471,7 +569,9 @@ const Billing = () => {
             )}
           </div>
         </div>
-      </div>      {/* Search & Returns Modal */}
+      </div>
+
+      {/* Search & Returns Modal */}
       {showSearchModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
           <div className="glass-card" style={{ width: '90%', maxWidth: '600px', padding: '32px', position: 'relative', background: 'white', color: 'var(--text-main)' }}>
@@ -513,7 +613,7 @@ const Billing = () => {
                       }}
                       style={{ padding: '6px 12px', borderRadius: '20px', border: '1px solid var(--border-color)', background: '#f8fafc', fontSize: '0.75rem', cursor: 'pointer', transition: 'all 0.2s' }}
                     >
-                      {inv.invoiceNumber.split('-').pop()} (PKR {inv.totalAmount.toFixed(0)})
+                      {inv.invoiceNumber.split('-').pop()} ({fmt(inv.totalAmount)})
                     </button>
                   )) : <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>No recent invoices found.</span>}
                 </div>
@@ -535,13 +635,10 @@ const Billing = () => {
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                      Subtotal: PKR {((searchedInvoice.totalAmount || 0) / 0.9).toFixed(2)}
-                    </div>
-                    <div style={{ fontSize: '0.85rem', color: '#10b981' }}>
-                      Discount (10%): - PKR {((searchedInvoice.totalAmount || 0) / 0.9 * 0.1).toFixed(2)}
+                      Discount: {fmt(searchedInvoice.discountAmount || 0)}
                     </div>
                     <div style={{ fontSize: '1.2rem', fontWeight: '800', color: searchedInvoice.returned ? '#ef4444' : 'var(--success)', marginTop: '4px' }}>
-                      PKR {searchedInvoice.totalAmount.toFixed(2)}
+                      {fmt(searchedInvoice.totalAmount)}
                     </div>
                     <span className={`badge badge-${searchedInvoice.returned ? 'danger' : 'success'}`}>
                       {searchedInvoice.returned ? 'RETURNED / REFUNDED' : 'PAID'}
@@ -568,7 +665,7 @@ const Billing = () => {
                             <td style={{ padding: '8px 0', fontWeight: '500' }}>{item.medicine?.brandName || 'Unknown Item'}</td>
                             <td style={{ padding: '8px 0', textAlign: 'right' }}>{item.quantity}</td>
                             <td style={{ padding: '8px 0', textAlign: 'right', color: '#64748b' }}>{item.returnedQuantity || 0}</td>
-                            <td style={{ padding: '8px 0', textAlign: 'right' }}>{(item.price || 0).toFixed(2)}</td>
+                            <td style={{ padding: '8px 0', textAlign: 'right' }}>{(item.price || 0).toFixed(3)}</td>
                             {!searchedInvoice.returned && (
                               <td style={{ padding: '8px 0', textAlign: 'right' }}>
                                 {availableToReturn > 0 ? (
@@ -602,7 +699,7 @@ const Billing = () => {
                       <div className="animate-fade-in" style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '10px', padding: '16px', marginBottom: '16px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <span style={{ fontWeight: '600', color: '#166534' }}>Refund Amount:</span>
-                          <span style={{ fontSize: '1.2rem', fontWeight: '800', color: '#15803d' }}>PKR {calculatePartialRefund().toFixed(2)}</span>
+                          <span style={{ fontSize: '1.2rem', fontWeight: '800', color: '#15803d' }}>{fmt(calculatePartialRefund())}</span>
                         </div>
                         <button 
                           className="btn-primary" 
@@ -629,7 +726,7 @@ const Billing = () => {
 
                 {showReturnConfirm && (
                   <div style={{ background: '#fff1f2', padding: '16px', borderRadius: '12px', border: '1px solid #fda4af', textAlign: 'center' }}>
-                    <div style={{ color: '#be123c', fontWeight: '700', marginBottom: '12px', fontSize: '0.9rem' }}>Are you sure? This action will restock ALL items and refund PKR {searchedInvoice.totalAmount.toFixed(2)}.</div>
+                    <div style={{ color: '#be123c', fontWeight: '700', marginBottom: '12px', fontSize: '0.9rem' }}>Are you sure? This action will restock ALL items and refund {fmt(searchedInvoice.totalAmount)}.</div>
                     <div style={{ display: 'flex', gap: '8px' }}>
                       <button className="btn-danger" style={{ flex: 1, padding: '10px' }} onClick={handleReturn} disabled={isSearchingInvoice}>Yes, Confirm Return</button>
                       <button className="btn-secondary" style={{ flex: 1, padding: '10px' }} onClick={() => setShowReturnConfirm(false)}>Cancel</button>

@@ -161,6 +161,54 @@ body {
   vertical-align: middle;
 }
 
+/* Zero-Waste Space Optimization */
+.compact-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.compact-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: var(--bg-card) !important;
+  border-bottom: 2px solid var(--border-color);
+  padding: 6px 0 !important;
+  font-size: 0.80rem;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.05);
+}
+
+.compact-table tbody td {
+  padding: 4px 0 !important;
+  border-bottom: 1px solid #f1f5f9;
+  line-height: 1.1;
+  vertical-align: middle;
+}
+
+.low-profile-input {
+  height: 28px !important;
+  padding: 2px 6px !important;
+  font-size: 0.85rem !important;
+  border-radius: 4px !important;
+  border-width: 1px !important;
+  margin: 0 !important;
+  line-height: 1 !important;
+}
+
+.text-ellipsis {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+  max-width: 100%;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* Badges */
 .badge {
   display: inline-flex;

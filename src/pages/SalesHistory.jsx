@@ -8,18 +8,26 @@ const SalesHistory = () => {
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
 
   useEffect(() => {
-    billingService.getInvoices()
+    setLoading(true);
+    billingService.getInvoices(page, 15)
       .then(({ data }) => {
-        // Filter to show only current user's invoices if createdBy is available
-        setInvoices(data);
+        setInvoices(data.content || []);
+        setTotalPages(data.totalPages || 0);
+        setTotalElements(data.totalElements || 0);
       })
-      .catch(() => setError('Could not load sales history. Is the backend running?'))
+      .catch((err) => {
+        console.error("Sales History Error:", err);
+        setError('Sales history data is currently unavailable. Please ensure the backend service is running and properly connected.');
+      })
       .finally(() => setLoading(false));
-  }, []);
+  }, [page]);
 
-  const fmt = (n) => `PKR ${Number(n || 0).toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const fmt = (n) => `PKR ${Number(n || 0).toLocaleString('en-PK', { minimumFractionDigits: 3, maximumFractionDigits: 3 })}`;
 
   const formatDate = (dateStr) => new Date(dateStr).toLocaleString('en-PK', {
     year: 'numeric', month: 'short', day: 'numeric',
@@ -35,7 +43,7 @@ const SalesHistory = () => {
     <div>
       <div className="page-header">
         <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <History size={26} color="var(--primary)" /> Personal Sales History
+          <History size={26} color="var(--primary)" /> Sales History
         </h1>
         <div className="glass-card" style={{ padding: '12px 20px', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
           <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Total Revenue</span>
@@ -57,6 +65,7 @@ const SalesHistory = () => {
                 <th>Date / Time</th>
                 <th>Items</th>
                 <th style={{ textAlign: 'right' }}>Total</th>
+                {user?.role === 'ROLE_ADMIN' && <th style={{ textAlign: 'right' }}>Net Profit</th>}
               </tr>
             </thead>
             <tbody>
@@ -91,12 +100,42 @@ const SalesHistory = () => {
                     </div>
                   </td>
                   <td style={{ textAlign: 'right', fontWeight: '700' }}>{fmt(inv.totalAmount)}</td>
+                  {user?.role === 'ROLE_ADMIN' && (
+                    <td style={{ textAlign: 'right', color: '#10b981', fontWeight: '600' }}>
+                      {inv.returned ? '—' : fmt(inv.totalProfit)}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
           </table>
         )}
       </div>
+
+      {/* Pagination Footer */}
+      {totalPages > 1 && (
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', alignItems: 'center', marginTop: '24px' }}>
+          <button 
+            className="btn-secondary" 
+            disabled={page === 0} 
+            onClick={() => setPage(prev => prev - 1)}
+            style={{ padding: '8px 20px' }}
+          >
+            Previous
+          </button>
+          <span style={{ color: 'var(--text-muted)', fontWeight: '600' }}>
+            Page {page + 1} of {totalPages}
+          </span>
+          <button 
+            className="btn-secondary" 
+            disabled={page >= totalPages - 1} 
+            onClick={() => setPage(prev => prev + 1)}
+            style={{ padding: '8px 20px' }}
+          >
+            Next
+          </button>
+        </div>
+      )}
     </div>
   );
 };
