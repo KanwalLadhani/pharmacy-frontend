@@ -73,17 +73,45 @@ const Billing = () => {
     }
   }, [medicines, highlightedIndex, selectedMed]);
 
-  // Ctrl+Enter global shortcut for checkout
+  // Global keyboard shortcuts: Ctrl+Enter checkout, "/" focus search, Escape clear
   useEffect(() => {
     const handleGlobalKeyDown = (e) => {
+      // Ctrl+Enter: Quick checkout
       if (e.ctrlKey && e.key === 'Enter' && cart.length > 0 && !checkoutSuccess) {
         e.preventDefault();
         checkout();
+        return;
+      }
+      
+      // "/" key: Focus search bar (only when not typing in an input)
+      if (e.key === '/' && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        return;
+      }
+      
+      // Escape: Clear search/selection or close modal
+      if (e.key === 'Escape') {
+        if (showSearchModal) {
+          setShowSearchModal(false);
+          return;
+        }
+        if (selectedMed) {
+          setSelectedMed(null);
+          setSearchQuery('');
+          setAlternates([]);
+          return;
+        }
+        if (searchQuery) {
+          setSearchQuery('');
+          setMedicines([]);
+          searchInputRef.current?.blur();
+        }
       }
     };
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [cart, checkoutSuccess]);
+  }, [cart, checkoutSuccess, showSearchModal, selectedMed, searchQuery]);
 
   const selectMedicine = async (med) => {
     setSelectedMed(med);
@@ -329,7 +357,7 @@ const Billing = () => {
                   ref={searchInputRef}
                   type="text" 
                   className="input-field" 
-                  placeholder="Type medicine name..." 
+                  placeholder="Type medicine name... ( / )" 
                   value={searchQuery}
                   onChange={e => {
                     setSearchQuery(e.target.value);
@@ -545,7 +573,14 @@ const Billing = () => {
                   {fmt(grandTotal)}
                 </div>
               </div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'right' }}>Items count: {cart.length} · <span style={{ opacity: 0.5 }}>Ctrl+Enter: Quick Checkout</span></div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'right', display: 'flex', gap: '10px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                <span>Items: {cart.length}</span>
+                <span style={{ opacity: 0.5 }}>[ / ] Search</span>
+                <span style={{ opacity: 0.5 }}>[ ↑↓ ] Navigate</span>
+                <span style={{ opacity: 0.5 }}>[ Enter ] Select</span>
+                <span style={{ opacity: 0.5 }}>[ Esc ] Clear</span>
+                <span style={{ opacity: 0.5 }}>[ Ctrl+Enter ] Checkout</span>
+              </div>
             </div>
             
             {!checkoutSuccess ? (

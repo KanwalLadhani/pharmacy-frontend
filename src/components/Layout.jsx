@@ -71,9 +71,6 @@ const Sidebar = ({ isOpen, onClose }) => {
               <NavLink to="/inventory" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`} onClick={onClose}>
                 <Package size={18} /> View Inventory
               </NavLink>
-              <NavLink to="/shift-closing" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`} onClick={onClose}>
-                <Calendar size={18} /> Shift Closing Report
-              </NavLink>
               <NavLink to="/sales-history" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`} onClick={onClose}>
                 <History size={18} /> Sales History
               </NavLink>
