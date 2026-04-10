@@ -320,7 +320,7 @@ const Billing = () => {
               <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-muted)', fontSize: '0.83rem' }}>Search Medicine Name</label>
               <div style={{ position: 'relative' }}>
                 <Search size={16} color="var(--text-muted)" style={{ position: 'absolute', left: '12px', top: '14px' }} />
-                <input ref={searchInputRef} type="text" className="input-field" placeholder="Type medicine name... ( / )" value={searchQuery} onChange={e => { setSearchQuery(e.target.value); if (selectedMed) { setSelectedMed(null); setAlternates([]); } }} onKeyDown={handleSearchKeyDown} style={{ paddingLeft: '38px' }} />
+                <input ref={searchInputRef} type="text" className="input-field" placeholder="Type medicine name..." value={searchQuery} onChange={e => { setSearchQuery(e.target.value); if (selectedMed) { setSelectedMed(null); setAlternates([]); } }} onKeyDown={handleSearchKeyDown} style={{ paddingLeft: '38px' }} />
               </div>
 
               {searchQuery.trim().length > 1 && !selectedMed && (
@@ -456,7 +456,7 @@ const Billing = () => {
               {totalItemDiscounts > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#10b981', fontWeight: '600' }}><span>Total Item Discounts</span><span>- {fmt(totalItemDiscounts)}</span></div>}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '8px' }}><span style={{ fontWeight: '700' }}>Grand Total</span><div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--primary)', lineHeight: '1' }}>{fmt(grandTotal)}</div></div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'right', display: 'flex', gap: '10px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                <span>Items: {cart.length}</span><span style={{ opacity: 0.5 }}>[ / ] Search</span><span style={{ opacity: 0.5 }}>[ ↑↓ ] Navigate</span><span style={{ opacity: 0.5 }}>[ Enter ] Select</span><span style={{ opacity: 0.5 }}>[ Esc ] Clear</span><span style={{ opacity: 0.5 }}>[ Ctrl+Enter ] Checkout</span>
+                <span>Items: {cart.length}</span>
               </div>
             </div>
             {!checkoutSuccess ? (
