@@ -306,7 +306,7 @@ const Billing = () => {
       )}
 
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h1 className="page-title">MediStore Billing</h1>
+        <h1 className="page-title">Billing & Checkout</h1>
         <button className="btn-secondary" onClick={() => setShowSearchModal(true)}>
           <FileSearch size={18} /> Returns & Search
         </button>
