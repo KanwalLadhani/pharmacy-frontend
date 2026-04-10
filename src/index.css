@@ -98,9 +98,10 @@ body {
 
 .main-content {
   flex: 1;
-  margin-left: 260px;
+  margin: 0 auto;
   padding: 40px;
-  max-width: 1400px;
+  max-width: 1600px;
+  width: 100%;
 }
 
 /* Typography & Headers */
@@ -748,9 +749,10 @@ button:disabled {
 }
 
 .main-layout-wrapper .main-content {
-  margin-left: 0;
+  margin: 0 auto;
   padding: 32px;
-  max-width: 1400px;
+  max-width: 1600px;
+  width: 100%;
 }
 
 .layout-pushed {
