@@ -2,8 +2,6 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { inventoryService, billingService } from '../services/api';
 import { Plus, Trash2, ShoppingCart, Search, Printer, CheckCircle, Info, AlertTriangle, X, FileSearch } from 'lucide-react';
 
-const fmt = (val) => `PKR ${Number(val || 0).toFixed(3)}`;
-
 const Billing = () => {
   const [medicines, setMedicines]      = useState([]);
   const [cart, setCart]                = useState([]);
