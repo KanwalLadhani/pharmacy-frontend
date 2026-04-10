@@ -312,6 +312,21 @@ button:disabled {
   animation: fadeIn 0.3s ease-out forwards;
 }
 
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fade-in 0.2s ease-out;
+}
+
 /* Scrollbar styling for dropdowns */
 ::-webkit-scrollbar {
   width: 8px;
