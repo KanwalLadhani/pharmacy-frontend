@@ -680,3 +680,83 @@ button:disabled {
 .forbidden-role {
   font-size: 0.85rem;
 }
+
+/* ============================================================
+   RESPONSIVE SIDEBAR & HEADER — Ported from PharmaDesk
+   ============================================================ */
+
+/* Override fixed sidebar to drawer mode */
+.sidebar {
+  width: 260px;
+  background-color: var(--sidebar-bg);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  padding: 24px 0;
+  position: fixed;
+  height: 100vh;
+  left: -260px;
+  top: 0;
+  z-index: 50;
+  transition: left 0.3s ease;
+}
+
+.sidebar.sidebar-open {
+  left: 0;
+}
+
+.sidebar.sidebar-closed {
+  left: -260px;
+}
+
+.btn-close-sidebar {
+  cursor: pointer;
+  padding: 4px;
+}
+
+.hamburger-menu {
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+
+.hamburger-menu:hover {
+  background: var(--sidebar-hover) !important;
+}
+
+/* Sticky Top Header */
+.top-header {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0 24px;
+  background: white;
+  border-bottom: 1px solid var(--border-color);
+  position: sticky;
+  top: 0;
+  z-index: 40;
+}
+
+/* Layout wrapper — adjusts content when sidebar is open */
+.main-layout-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  transition: margin-left 0.3s ease;
+}
+
+.main-layout-wrapper .main-content {
+  margin-left: 0;
+  padding: 32px;
+  max-width: 1400px;
+}
+
+.layout-pushed {
+  margin-left: 260px;
+}
+
+.layout-full {
+  margin-left: 0;
+}
