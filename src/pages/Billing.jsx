@@ -111,7 +111,7 @@ const Billing = () => {
     };
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [cart, checkoutSuccess, showSearchModal, selectedMed, searchQuery]);
+  }, [cart, checkout, checkoutSuccess, showSearchModal, selectedMed, searchQuery]);
 
   const selectMedicine = async (med) => {
     setSelectedMed(med);
@@ -183,7 +183,7 @@ const Billing = () => {
   const totalItemDiscounts = cart.reduce((s, i) => s + (i.discount || 0), 0);
   const grandTotal = subtotal - totalItemDiscounts;
 
-  const checkout = async () => {
+  const checkout = useCallback(async () => {
     if (!cart.length) return;
     try {
       const res = await billingService.createInvoice({
@@ -206,7 +206,7 @@ const Billing = () => {
     } catch (err) {
       setNotification({ type: 'error', text: err.response?.data?.message || 'Checkout failed. Try again.' });
     }
-  };
+  }, [cart]);
 
   const clearCart = () => {
     setCart([]);

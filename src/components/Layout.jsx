@@ -66,7 +66,7 @@ const Sidebar = ({ isOpen, onClose }) => {
           ) : (
             <>
               <NavLink to="/billing" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`} onClick={onClose}>
-                <Receipt size={18} /> Point of Sale (Billing)
+                <Receipt size={18} /> Billing and Checkout
               </NavLink>
               <NavLink to="/inventory" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`} onClick={onClose}>
                 <Package size={18} /> View Inventory
