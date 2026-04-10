@@ -6,7 +6,7 @@ const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => {
-    const token = localStorage.getItem('medistore_token');
+    const token = sessionStorage.getItem('medistore_token');
     if (token) {
       try {
         const decoded = jwtDecode(token);
@@ -17,7 +17,7 @@ export const AuthProvider = ({ children }) => {
       } catch {
         /* invalid token */
       }
-      localStorage.removeItem('medistore_token');
+      sessionStorage.removeItem('medistore_token');
     }
     return null;
   });
@@ -25,7 +25,7 @@ export const AuthProvider = ({ children }) => {
   const login = useCallback(async (username, password) => {
     const response = await api.post('/auth/login', { username, password });
     const { token, role } = response.data;
-    localStorage.setItem('medistore_token', token);
+    sessionStorage.setItem('medistore_token', token);
     const decoded = jwtDecode(token);
     const userData = { token, username: decoded.sub, role };
     setUser(userData);
@@ -33,7 +33,7 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem('medistore_token');
+    sessionStorage.removeItem('medistore_token');
     setUser(null);
   }, []);
 

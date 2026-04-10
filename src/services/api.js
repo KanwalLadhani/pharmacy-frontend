@@ -9,7 +9,7 @@ export const api = axios.create({
 // --- Request Interceptor: Attach JWT token ---
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('medistore_token');
+    const token = sessionStorage.getItem('medistore_token');
     if (token) {
       config.headers['Authorization'] = `Bearer ${token}`;
     }
@@ -23,7 +23,7 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('medistore_token');
+      sessionStorage.removeItem('medistore_token');
       window.location.href = '/login';
     }
     return Promise.reject(error);
