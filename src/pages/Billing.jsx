@@ -14,7 +14,9 @@ const Billing = () => {
   const [checkoutSuccess, setCheckoutSuccess] = useState(false);
   const [generatedInvoice, setGeneratedInvoice] = useState(null);
   
-  // Invoice Search state
+  // Search and Input state
+  const searchInputRef = useRef(null);
+  const qtyInputRef = useRef(null);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [invoiceSearchQuery, setInvoiceSearchQuery] = useState('');
   const [searchedInvoice, setSearchedInvoice] = useState(null);
@@ -28,7 +30,6 @@ const Billing = () => {
 
   // Keyboard navigation
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
-  const searchInputRef = useRef(null);
 
   // Auto-hide notifications
   useEffect(() => {
@@ -130,6 +131,8 @@ const Billing = () => {
       setAlternates([]);
     } finally {
       setLoadingAlternates(false);
+      // Keyboard workflow: focus Quantity input after selection
+      setTimeout(() => qtyInputRef.current?.focus(), 50);
     }
   };
 
@@ -137,7 +140,10 @@ const Billing = () => {
     if (!med || qty < 1) return;
     const q = parseInt(qty);
 
-    if (q > (med.quantity ?? 0)) {
+    const existingItem = cart.find(i => i.medicineId === med.brandId);
+    const currentCartQty = existingItem ? existingItem.quantity : 0;
+
+    if (currentCartQty + q > (med.quantity ?? 0)) {
       setNotification({ type: 'error', text: `Only ${med.quantity ?? 0} units available for "${med.brandName}"` });
       return;
     }
@@ -145,8 +151,7 @@ const Billing = () => {
     const unitPrice = Number(med.price || 0);
 
     setCart(prev => {
-      const exists = prev.find(i => i.medicineId === med.brandId);
-      return exists
+      return existingItem
         ? prev.map(i => i.medicineId === med.brandId
             ? { ...i, quantity: i.quantity + q }
             : i)
@@ -157,7 +162,7 @@ const Billing = () => {
             manufacturer: med.manufacturer  || '',
             unitPrice,
             quantity:     q,
-            discount:     0,   // Per-item discount in PKR
+            discount:     0,   // Per-item discount as percentage
           }];
     });
 
@@ -166,6 +171,9 @@ const Billing = () => {
       setSearchQuery('');
       setQuantity(1);
       setAlternates([]);
+      setHighlightedIndex(-1);
+      // Keyboard workflow: jump back to search after adding
+      setTimeout(() => searchInputRef.current?.focus(), 50);
     }
     setCheckoutSuccess(false);
     setNotification({ type: 'success', text: `Added ${q}× ${med.brandName}` });
@@ -180,7 +188,7 @@ const Billing = () => {
   };
 
   const subtotal = cart.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
-  const totalItemDiscounts = cart.reduce((s, i) => s + (i.discount || 0), 0);
+  const totalItemDiscounts = cart.reduce((s, i) => s + (i.unitPrice * i.quantity) * (Number(i.discount || 0) / 100), 0);
   const grandTotal = subtotal - totalItemDiscounts;
 
   const checkout = useCallback(async () => {
@@ -190,7 +198,7 @@ const Billing = () => {
         items: cart.map(i => ({ 
           medicineId: i.medicineId, 
           quantity: i.quantity,
-          discount: i.discount || 0
+          discount: (i.unitPrice * i.quantity) * (Number(i.discount || 0) / 100)
         })),
         discountPercentage: 0
       });
@@ -412,7 +420,13 @@ const Billing = () => {
             <div style={{ width: '90px' }}>
               <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-muted)', fontSize: '0.83rem' }}>Qty</label>
               <input type="number" min="1" className="input-field" value={quantity}
-                onChange={e => setQuantity(e.target.value)} disabled={!selectedMed} />
+                ref={qtyInputRef}
+                onChange={e => setQuantity(e.target.value)} 
+                onKeyDown={e => {
+                  if (e.key === 'Enter') addToCart();
+                }}
+                disabled={!selectedMed} 
+              />
             </div>
             <div style={{ paddingTop: '24px' }}>
               <button className="btn-primary" onClick={() => addToCart()} style={{ whiteSpace: 'nowrap' }} disabled={!selectedMed || selectedMed.quantity <= 0}>
@@ -510,15 +524,13 @@ const Billing = () => {
                        <th style={{ paddingBottom: '8px', fontWeight: '500' }}>Item</th>
                        <th style={{ paddingBottom: '8px', fontWeight: '500', textAlign: 'right' }}>Qty</th>
                        <th style={{ paddingBottom: '8px', fontWeight: '500', textAlign: 'right' }}>Price</th>
-                       {!checkoutSuccess && <th style={{ paddingBottom: '8px', fontWeight: '500', textAlign: 'right', width: '80px' }} className="no-print">Disc (PKR)</th>}
+                       {!checkoutSuccess && <th style={{ paddingBottom: '8px', fontWeight: '500', textAlign: 'right', width: '80px' }} className="no-print">Disc (%)</th>}
                        <th style={{ paddingBottom: '8px', fontWeight: '500', textAlign: 'right' }}>Total</th>
                        {!checkoutSuccess && <th className="no-print"></th>}
                     </tr>
                  </thead>
                  <tbody>
-                    {cart.map(item => {
-                      const rowTotal = (item.unitPrice * item.quantity) - (item.discount || 0);
-                      return (
+                    {cart.map(item => (
                         <tr key={item.medicineId} style={{ borderBottom: '1px dashed var(--border-color)' }} className="print-border">
                            <td style={{ padding: '10px 0' }}>
                               <div className="text-ellipsis" style={{ fontWeight: '600', maxWidth: '160px' }}>{item.brandName}</div>
@@ -526,19 +538,25 @@ const Billing = () => {
                            </td>
                            <td style={{ padding: '10px 0', textAlign: 'right' }}>{item.quantity}</td>
                            <td style={{ padding: '10px 0', textAlign: 'right' }}>{item.unitPrice.toFixed(3)}</td>
-                           {!checkoutSuccess && (
+                           {!checkoutSuccess ? (
                              <td style={{ padding: '10px 0', textAlign: 'right' }} className="no-print">
                                <input 
-                                 type="number" min="0"
+                                 type="number" 
+                                 min="0"
+                                 max="100"
                                  className="low-profile-input"
                                  value={item.discount || 0}
                                  onChange={e => updateItemDiscount(item.medicineId, e.target.value)}
                                  style={{ width: '65px', textAlign: 'center' }}
                                />
                              </td>
+                           ) : (
+                             <td style={{ padding: '10px 0', textAlign: 'right', fontWeight: '600', color: 'var(--danger)' }} className="no-print">
+                               {Number(item.discount || 0)}%
+                             </td>
                            )}
                            <td style={{ padding: '10px 0', textAlign: 'right', fontWeight: '700' }}>
-                              {rowTotal.toFixed(3)}
+                              {( (item.unitPrice * item.quantity) * (1 - (Number(item.discount || 0) / 100)) ).toFixed(3)}
                            </td>
                            {!checkoutSuccess && (
                               <td style={{ padding: '10px 0', textAlign: 'right' }} className="no-print">
@@ -548,8 +566,7 @@ const Billing = () => {
                               </td>
                            )}
                         </tr>
-                      );
-                    })}
+                    ))}
                  </tbody>
               </table>
             )}
